@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Study Planner{% endblock %}
+
+{% block content %}
+
+<!-- ══════════════════════════════════════════════════════════════════
+     Dashboard stats cards
+════════════════════════════════════════════════════════════════════ -->
+<section class="stats-grid">
+  <div class="stat-card">
+    <span class="stat-number">{{ stats.total }}</span>
+    <span class="stat-label">Total Tasks</span>
+  </div>
+  <div class="stat-card stat-card--success">
+    <span class="stat-number">{{ stats.completed }}</span>
+    <span class="stat-label">Completed</span>
+  </div>
+  <div class="stat-card stat-card--danger">
+    <span class="stat-number">{{ stats.overdue }}</span>
+    <span class="stat-label">Overdue</span>
+  </div>
+  <div class="stat-card stat-card--warning">
+    <span class="stat-number">{{ stats.due_soon }}</span>
+    <span class="stat-label">Due in 7 Days</span>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     Per-course progress bars
+════════════════════════════════════════════════════════════════════ -->
+{% if stats.courses %}
+<section class="section">
+  <h2 class="section-title">Progress by Course</h2>
+  <div class="progress-list">
+    {% for c in stats.courses %}
+    <div class="progress-item">
+      <div class="progress-header">
+        <span class="progress-course">{{ c.course }}</span>
+        <span class="progress-pct">{{ c.completed }}/{{ c.total }} &nbsp;({{ c.pct }}%)</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" style="width: {{ c.pct }}%;"
+             aria-valuenow="{{ c.pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════════
+     Filter & sort controls
+════════════════════════════════════════════════════════════════════ -->
+<section class="section">
+  <h2 class="section-title">All Tasks</h2>
+
+  <form class="filter-form" method="get" action="{{ url_for('index') }}" id="filterForm">
+    <!-- Course filter -->
+    <label for="course">Course</label>
+    <select name="course" id="course">
+      <option value="">All courses</option>
+      {% for c in courses %}
+        <option value="{{ c }}" {% if c == course_filter %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+
+    <!-- Priority filter -->
+    <label for="priority">Priority</label>
+    <select name="priority" id="priority">
+      <option value="">All</option>
+      <option value="high"   {% if priority_filter == 'high'   %}selected{% endif %}>High</option>
+      <option value="medium" {% if priority_filter == 'medium' %}selected{% endif %}>Medium</option>
+      <option value="low"    {% if priority_filter == 'low'    %}selected{% endif %}>Low</option>
+    </select>
+
+    <!-- Status filter -->
+    <label for="status">Status</label>
+    <select name="status" id="status">
+      <option value="">All</option>
+      <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+      <option value="done"    {% if status_filter == 'done'    %}selected{% endif %}>Done</option>
+    </select>
+
+    <!-- Sort -->
+    <label for="sort">Sort by</label>
+    <select name="sort" id="sort">
+      <option value="deadline" {% if sort_by == 'deadline'   %}selected{% endif %}>Deadline</option>
+      <option value="priority" {% if sort_by == 'priority'   %}selected{% endif %}>Priority</option>
+      <option value="course"   {% if sort_by == 'course'     %}selected{% endif %}>Course</option>
+      <option value="title"    {% if sort_by == 'title'      %}selected{% endif %}>Title</option>
+    </select>
+
+    <button type="submit" class="btn btn-secondary">Apply</button>
+    <a href="{{ url_for('index') }}" class="btn btn-ghost">Clear</a>
+  </form>
+
+  <!-- ── Task list ────────────────────────────────────────────────── -->
+  {% if tasks %}
+  <ul class="task-list">
+    {% for task in tasks %}
+      {# Determine the visual state of this task #}
+      {% if task.done %}
+        {% set row_class = "task-row task-row--done" %}
+      {% elif task.deadline < today %}
+        {% set row_class = "task-row task-row--overdue" %}
+      {% elif task.deadline <= (today | add_days(7)) %}
+        {% set row_class = "task-row task-row--due-soon" %}
+      {% else %}
+        {% set row_class = "task-row" %}
+      {% endif %}
+
+    <li class="{{ row_class }}">
+      <!-- Toggle button -->
+      <form class="toggle-form" method="post"
+            action="{{ url_for('toggle_task', task_id=task.id) }}">
+        <button type="submit" class="toggle-btn"
+                title="{{ 'Mark as pending' if task.done else 'Mark as done' }}"
+                aria-label="{{ 'Mark as pending' if task.done else 'Mark as done' }}">
+          {% if task.done %}✅{% else %}⬜{% endif %}
+        </button>
+      </form>
+
+      <!-- Task details -->
+      <div class="task-body">
+        <div class="task-title {% if task.done %}task-title--done{% endif %}">
+          {{ task.title }}
+        </div>
+        <div class="task-meta">
+          <span class="badge badge--course">{{ task.course }}</span>
+          <span class="badge badge--priority badge--{{ task.priority }}">{{ task.priority }}</span>
+          <span class="task-deadline">
+            📅 {{ task.deadline }}
+            {% if not task.done %}
+              {% if task.deadline < today %}
+                <span class="tag tag--overdue">Overdue</span>
+              {% elif task.deadline <= (today | add_days(7)) %}
+                <span class="tag tag--due-soon">Due soon</span>
+              {% endif %}
+            {% endif %}
+          </span>
+        </div>
+        {% if task.description %}
+          <p class="task-description">{{ task.description }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Action buttons -->
+      <div class="task-actions">
+        <a class="btn btn-sm btn-secondary"
+           href="{{ url_for('edit_task', task_id=task.id) }}">Edit</a>
+        <button class="btn btn-sm btn-danger js-confirm-delete"
+                data-form="delete-form-{{ task.id }}">Delete</button>
+      </div>
+
+      <!-- Hidden delete form (POST for safety) -->
+      <form id="delete-form-{{ task.id }}" method="post"
+            action="{{ url_for('delete_task', task_id=task.id) }}"
+            class="hidden-form"></form>
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% else %}
+    <div class="empty-state">
+      <p>No tasks found. <a href="{{ url_for('new_task') }}">Add your first task →</a></p>
+    </div>
+  {% endif %}
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     Study Assistant chat panel
+════════════════════════════════════════════════════════════════════ -->
+<section class="section chat-panel" id="studyAssistant">
+  <h2 class="section-title">
+    🤖 Study Assistant
+    <span class="chat-mode-badge" id="chatModeBadge"></span>
+  </h2>
+  <p class="chat-intro">
+    Ask me anything about your tasks — e.g.
+    <em>"What should I work on first today?"</em> or
+    <em>"Make a study schedule for this week."</em>
+  </p>
+
+  <!-- Conversation history -->
+  <div class="chat-history" id="chatHistory" aria-live="polite" aria-label="Chat history"></div>
+
+  <!-- Suggested prompts -->
+  <div class="chat-suggestions" id="chatSuggestions">
+    <button class="suggestion-chip" data-prompt="What should I work on first today?">What should I work on first today?</button>
+    <button class="suggestion-chip" data-prompt="Make a study schedule for this week.">Make a study schedule for this week.</button>
+    <button class="suggestion-chip" data-prompt="How many tasks do I have overdue?">How many tasks are overdue?</button>
+    <button class="suggestion-chip" data-prompt="Which course needs the most attention?">Which course needs the most attention?</button>
+  </div>
+
+  <!-- Input row -->
+  <form class="chat-form" id="chatForm" novalidate>
+    <input
+      type="text"
+      id="chatInput"
+      class="form-control chat-input"
+      placeholder="Ask the Study Assistant…"
+      autocomplete="off"
+      maxlength="500"
+      aria-label="Ask the Study Assistant"
+    />
+    <button type="submit" class="btn btn-primary chat-send-btn" id="chatSendBtn">
+      Send
+    </button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,6 @@
+Flask==3.0.3
+pytest==8.2.2
+# openai is optional — only needed when OPENAI_API_KEY is set.
+# The app works fully without it (falls back to rule-based answers).
+# Uncomment the line below to enable LLM-powered responses:
+# openai==1.35.0
